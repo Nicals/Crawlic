@@ -35,31 +35,12 @@ class Crawlic(Pholcidae):
 Load configuration files
 """
 
-def loadDorks(dorks_file):
-    """ Load dorks from dorks file """
-    dorks_list = []
-    for line in [line.strip() for line in open(dorks_file)]:
-        dorks_list.append(line)
-    return dorks_list
 
-def loadExtensions(extensions_file):
-    """ Load extensions from extensions file """
-    extensions_list = []
-    for line in [line.strip() for line in open(extensions_file)]:
-        extensions_list.append("(.*)%s" % line)
-    return extensions_list
-
-def loadUserAgents(user_agent_file):
-    """ Load user agents from user_agent file """
-    for line in [line.strip() for line in open(user_agent_file)]:
-        user_agent_list.append(line)
-
-def loadGoogleDorks(google_dorks_file):
-    """ Load google dorks from google_dorks_file """
-    google_dorks_list = []
-    for line in [line.strip() for line in open(google_dorks_file)]:
-        google_dorks_list.append(line)
-    return google_dorks_list
+def loadList(filepath, callback=lambda s: s):
+    """Load a list file. Apply a callback on each value if more processing
+    is needed.
+    """
+    return [callback(l.strip()) for l in open(filepath)]
 
 """
 Usefull methods
@@ -223,6 +204,7 @@ def main():
 
     # Make sure the host is up
     print "[*] Probe host %s" % args.url
+
     try:
         requests.head(args.url)
     except requests.exceptions.ConnectionError:
@@ -230,19 +212,40 @@ def main():
         return
 
     # Load configuration from files
-    loadUserAgents(args.user_agent)
-    Crawlic.extension_list = loadDorks(args.dorks)
+    try:
+        user_agent_list.extend(loadList(args.user_agent))
+    except IOError():
+        print '[!] User agent list %s doesn\'t exist' % args.user_agent
+        return
+
+    try:
+        Crawlic.extension_list = loadList(args.dorks)
+    except IOError():
+        print '[!] Dorks list %s doesn\'t exist' % args.dorks
+        return
+
     page_not_found_pattern = getPageNotFoundPattern(args.url)
-    google_dorks = loadGoogleDorks(args.google_dorks)
+
+    try:
+        google_dorks = loadList(args.google_dorks)
+    except IOError():
+        print '[!] Google dorks list %s doesn\'t exist' % args.google_dorks
+        return
 
     # Configure crawler
     Crawlic.page_not_found_pattern = page_not_found_pattern
+    try:
+        valid_links = loadList(args.extensions, lambda s: '(.*%s)' % s)
+    except IOError():
+        print '[!] Extension list %s doesn\'t exists' % args.extensions
+        return
+
     Crawlic.settings = {
             'domain': domain,
             'start_page': '/',
             'stay_in_domain' : True,
             'protocol': protocol + "://",
-            'valid_links': loadExtensions(args.extensions),
+            'valid_links': valid_links,
             'headers' : {
                 'Referer': domain,
                 'User-Agent': getRandomUserAgent()
